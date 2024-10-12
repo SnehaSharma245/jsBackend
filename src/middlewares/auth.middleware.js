@@ -5,12 +5,15 @@ import { ApiError } from "../utils/ApiError.js";
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.models.js";
 //verifyJWT: Yeh function JWT (JSON Web Token) ko verify karega. Yeh middleware hai, jo request aane ke baad aur response bhejne se pehle check karta hai ki user ka token valid hai ya nahi.
-const verifyJWT = asyncHandler(async (req, res, next) => {
+export const verifyJWT = asyncHandler(async (req, res, next) => {
   try {
-    const token =
-      req.cookies?.accessToken ||
-      req.header("Authorization"?.replace("Bearer ", "")); //Header mein token "Bearer <token>" ke format mein hota hai, toh replace("Bearer ", "") isse clean kar deta hai, taaki sirf token bache.
+    // console.log(req.headers);
+    // console.log(req.cookies);
 
+    const token =
+      req.cookies?.["Access Token"] ||
+      req.header("Authorization")?.replace("Bearer ", ""); //Header mein token "Bearer <token>" ke format mein hota hai, toh replace("Bearer ", "") isse clean kar deta hai, taaki sirf token bache.
+    // console.log(token);
     if (!token) {
       throw new ApiError(401, "Unauthorized Request");
     }
@@ -29,5 +32,3 @@ const verifyJWT = asyncHandler(async (req, res, next) => {
     throw new ApiError(401, error?.message || "Invalid access token");
   }
 });
-
-export { verifyJWT };
