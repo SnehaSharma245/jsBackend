@@ -24,5 +24,38 @@ const uploadOnCloudinary = async (localFilePath) => {
     return null;
   }
 };
+const deleteFromCloudinary = async (avatarUrl) => {
+  try {
+    if (!avatarUrl) return null;
 
-export { uploadOnCloudinary };
+    // Extract public_id from the Cloudinary URL
+    const publicId = getPublicIdFromUrl(avatarUrl);
+
+    // Delete file from Cloudinary using public_id
+    const response = await cloudinary.uploader.destroy(publicId);
+
+    // Check if deletion was successful
+    if (response.result === "ok") {
+      // File deleted successfully
+      console.log("File deleted successfully from Cloudinary");
+      return response;
+    } else {
+      console.log("Failed to delete file from Cloudinary");
+      return null;
+    }
+  } catch (error) {
+    console.error("Error deleting file from Cloudinary", error);
+    return null;
+  }
+};
+
+// Helper function to extract public_id from Cloudinary URL
+const getPublicIdFromUrl = (url) => {
+  // Assuming URL is like: https://res.cloudinary.com/<cloud_name>/image/upload/v<version>/<public_id>.<file_extension>
+  const parts = url.split("/");
+  const fileName = parts[parts.length - 1]; // Get the last part, which is public_id with extension
+  const publicId = fileName.split(".")[0]; // Remove the extension from file name
+  return publicId;
+};
+
+export { uploadOnCloudinary, deleteFromCloudinary };
