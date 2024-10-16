@@ -5,6 +5,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { deleteFromCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 //access token aur refresh token generate karne ke liye function
 const generateAccessAndRefreshToken = async (userId) => {
   try {
@@ -386,6 +387,59 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, channel[0], "Channel fetched succesfully"));
 });
+
+const getWatchHistory = asyncHandler(async (req, res) => {
+  const user = await User.aggregate([
+    {
+      // req.user._id ye hume sirf string return karta hai ye mongodb ki id nhi hoti
+      // mongodb ki id ka format : - ObjectId('string')
+      //ab mongoose ise directly mongodb ki objectID mein
+      //aggregation pipeline mein mongoose ye work nhi karta hai isliye hume use manually convert karna padta hai
+      $match: {
+        _id: new mongoose.Types.ObjectID(req.user._id),
+      },
+      $lookup: {
+        from: "videos",
+        localField: "watchHistory",
+        foreignField: "_id",
+        as: "watchHistory",
+        pipeline: [
+          {
+            $lookup: {
+              from: "users",
+              localField: "owner",
+              foreignField: "_id",
+              as: "owner",
+            },
+            pipeline: [
+              {
+                $project: {},
+              },
+            ],
+          },
+          {
+            $addFields: {
+              owner: {
+                $first: "$owner",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ]);
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        user[0].watchHistory,
+        "Watch History fetched successfully"
+      )
+    );
+});
+
 export {
   registerUser,
   loginUser,
@@ -397,4 +451,5 @@ export {
   updateUserAvatar,
   updateCoverImage,
   getUserChannelProfile,
+  getWatchHistory,
 };
