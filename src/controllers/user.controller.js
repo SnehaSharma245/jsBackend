@@ -158,8 +158,8 @@ const logoutUser = asyncHandler(async (req, res) => {
   await User.findByIdAndUpdate(
     req._id,
     {
-      $set: {
-        refreshToken: undefined,
+      $unset: {
+        refreshToken: 1,
       },
     },
     {
@@ -182,7 +182,8 @@ const logoutUser = asyncHandler(async (req, res) => {
 const refreshAccesToken = asyncHandler(async (req, res) => {
   try {
     const incomingRefreshToken =
-      req.cookies("Refresh Token") || req.body("Refresh Token");
+      req.cookies["Refresh Token"] || req.body["Refresh Token"];
+
     if (!incomingRefreshToken) {
       throw new ApiError(401, "Unauthorized request");
     }
@@ -244,21 +245,23 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 const updateAccountDetails = asyncHandler(async (req, res) => {
   const { fullName, email } = req.body;
 
-  if (!fullName || !email) {
+  if (!fullName && !email) {
     throw new ApiError(400, "All fields are required");
   }
 
-  const user = User.findByIdAndUpdate(
+  const user = await User.findByIdAndUpdate(
     req.user?._id,
     {
       $set: { fullName, email },
     },
-    { new: true }
-  ).select("-password");
+    { new: true, select: "-password" } // Select only required fields
+  );
+
+  // Prepare a sanitized response
 
   return res
     .status(200)
-    .json(new ApiResponse(200, user, "Account details updated succesfuly"));
+    .json(new ApiResponse(200, user, "Account details updated successfully"));
 });
 
 const updateUserAvatar = asyncHandler(async (req, res) => {
@@ -266,57 +269,63 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
   if (!avatarLocalPath) {
     throw new ApiError(400, "Avatar file is missing");
   }
+  const user = await User.findById(req.user?._id).select("-password");
+  if (!user) {
+    throw new ApiError(400, "User not found");
+  }
   const oldAvatarUrl = user.avatar;
   const avatar = await uploadOnCloudinary(avatarLocalPath);
 
   if (!avatar.url) {
     throw new ApiError(400, "Error while uploading avatar");
   }
+  user.avatar = avatar.url;
+  await user.save();
 
-  const user = User.findByIdAndUpdate(
-    req.user?._id,
-    {
-      $set: {
-        avatar: avatar.url,
-      },
-    },
-    { new: true }
-  ).select("-password");
   if (oldAvatarUrl) {
     await deleteFromCloudinary(oldAvatarUrl);
   }
+  const userResponse = {
+    _id: user._id,
+    avatar: user.avatar,
+  };
   return res
     .status(200)
-    .json(new ApiResponse(200, user, "Avatar image uploaded succesfully"));
+    .json(
+      new ApiResponse(200, userResponse, "Avatar image uploaded succesfully")
+    );
 });
 
 const updateCoverImage = asyncHandler(async (req, res) => {
   const coverImageLocalPath = req.file?.path;
   if (!coverImageLocalPath) {
-    throw new ApiError(400, "Avatar file is missing");
+    throw new ApiError(400, "Cover Image file is missing");
   }
-
-  const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+  const user = await User.findById(req.user?._id).select("-password");
+  if (!user) {
+    throw new ApiError(400, "User not found");
+  }
   const oldCoverImageUrl = user.coverImage;
-  if (!coverImage.url) {
-    throw new ApiError(400, "Error while uploading cover image");
-  }
+  const coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
-  const user = User.findByIdAndUpdate(
-    req.user?._id,
-    {
-      $set: {
-        coverImage: coverImage.url,
-      },
-    },
-    { new: true }
-  ).select("-password");
+  if (!coverImage.url) {
+    throw new ApiError(400, "Error while uploading coverImage");
+  }
+  user.coverImage = coverImage.url;
+  await user.save();
+
   if (oldCoverImageUrl) {
     await deleteFromCloudinary(oldCoverImageUrl);
   }
+  const userResponse = {
+    _id: user._id,
+    coverImage: user.coverImage,
+  };
   return res
     .status(200)
-    .json(new ApiResponse(200, user, "cover image image uploaded succesfully"));
+    .json(
+      new ApiResponse(200, userResponse, "Cover image uploaded succesfully")
+    );
 });
 
 const getUserChannelProfile = asyncHandler(async (req, res) => {
@@ -329,11 +338,13 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
   // User.find({username})
 
   const channel = await User.aggregate([
+    //username ka use karke database mein match kiya ja raha hai ki koi user hai jiska username yeh ho, aur username ko lowercase mein convert kar diya gaya hai
     {
       $match: {
         username: username?.toLowerCase(),
       },
     },
+    //Yeh subscriptions collection se users ko dhoondhne ka kaam karta hai jo iss channel ko subscribe kar chuke hain.
     {
       $lookup: {
         from: "subscriptions",
@@ -342,6 +353,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         as: "subscribers",
       },
     },
+    //Yeh dhoondh raha hai ki yeh user kin channels ko subscribe karta hai.
     {
       $lookup: {
         from: "subscriptions",
@@ -413,7 +425,11 @@ const getWatchHistory = asyncHandler(async (req, res) => {
             },
             pipeline: [
               {
-                $project: {},
+                $project: {
+                  fullName: 1,
+                  username: 1,
+                  avatar: 1,
+                },
               },
             ],
           },

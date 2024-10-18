@@ -30,10 +30,10 @@ const deleteFromCloudinary = async (avatarUrl) => {
 
     // Extract public_id from the Cloudinary URL
     const publicId = getPublicIdFromUrl(avatarUrl);
-
+    console.log("PublicId: ", publicId);
     // Delete file from Cloudinary using public_id
     const response = await cloudinary.uploader.destroy(publicId);
-
+    console.log("Response: ", response);
     // Check if deletion was successful
     if (response.result === "ok") {
       // File deleted successfully
